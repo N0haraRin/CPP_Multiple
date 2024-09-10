@@ -3,11 +3,8 @@
 extern int vn;
 extern int cn;
 
-
-
-ClsNode* read_cnf(string& filename)
+ClsNode* read_cnf(string& filename, short*& times)
 {
-	
 	ifstream fp(filename);
 	if (!fp)
 	{
@@ -27,9 +24,12 @@ ClsNode* read_cnf(string& filename)
 	{
 		fp >> format >> vn >> cn;
 	}
+	times = new short[vn + 1];
+	memset(times, 0, sizeof(short) * (vn + 1));
 	int clscnt = 0; // count clsnum
 	ClsNode* CHead, * CTail;
 	CHead = CTail = nullptr;
+	int abs = 0;
 	while (cn != clscnt)
 	{
 		VarNode* VHead, * VTail;
@@ -39,6 +39,8 @@ ClsNode* read_cnf(string& filename)
 		fp >> var;
 		while (var)
 		{
+			abs = var > 0 ? var : -var;
+			times[abs]++;
 			if (!VHead)
 			{
 				VHead = new VarNode;
