@@ -1,66 +1,320 @@
-#define _CRT_SECURE_NO_WARNINGS 1
-
 #include "global.h"
 
-int vn; // variable num
-int cn; // clause num
-short* times = nullptr;
+extern short* times;
+extern int vn;
 
-int main()
+int findSC(ClsNode* cnf)
 {
-	string suffix_read = ".cnf";
-	string suffix_output = ".res";
-	string fn1;
-	cout << "Please enter the filename (enter quit to quit) : ";
-	cin >> fn1;
-	while (fn1 != "quit")
+	while (cnf)
 	{
-		string read = fn1 + suffix_read;
-		ClsNode* cnf = read_cnf(read, times);
-		short* ans = new short[vn + 1];
-		memset(ans, 0, sizeof(short) * (vn + 1));
-		/*
-		for (int i = 0; i < vn + 1; i++)
+		if (cnf->varnum == 1)
 		{
-			cout << ans[i] << endl;
+			//cout << "Find : " << cnf->ClsHead->var << endl; // test
+			return cnf->ClsHead->var;
 		}
-		*/
-		clock_t start = clock();
-		bool res = DPLL(cnf, ans);
-		clock_t end = clock();
-		if (res)
+		cnf = cnf->down;
+	}
+	//cout << "No single clause!" << endl;
+	return 0;
+}
+
+void removeCls(ClsNode*& cnf, ClsNode* target)
+{
+	if (!cnf)
+	{
+		return;
+	}
+	if (cnf == target)
+	{
+		VarNode* cur = target->ClsHead;
+		while (cur)
 		{
-			string output = fn1 + suffix_output;
-			ofstream fp(output);
-			fp << "s" << " " << "1" << endl;
-			fp << "v" << " ";
-			for (int i = 1; i < vn + 1; i++)
+			int abs = cur->var > 0 ? cur->var : -cur->var;
+			times[abs]--;
+			cur = cur->next;
+		}
+		//cout << "Remove : " << target->ClsHead->var << endl; // test
+		cnf = cnf->down;
+	}
+	else
+	{
+		ClsNode* temp = cnf;
+		ClsNode* current = cnf->down;
+		while (current)
+		{
+			if (current == target)
 			{
-				if (ans[i] > 0)
+				VarNode* cur = target->ClsHead;
+				while (cur)
 				{
-					fp << i << " ";
+					int abs = cur->var > 0 ? cur->var : -cur->var;
+					times[abs]--;
+					cur = cur->next;
 				}
-				else
+				//cout << "Remove : " << target->ClsHead->var << endl; // test
+				cnf->down = current->down;
+				cnf = temp;
+				return;
+			}
+			cnf = current;
+			current = current->down;
+		}
+		cnf = temp;
+	}
+	return;
+}
+
+void removeSC(ClsNode*& cnf, int var)
+{
+	if (!cnf)
+	{
+		return;
+	}
+	while (cnf && cnf->varnum == 1 && cnf->ClsHead->var == var)
+	{
+		removeCls(cnf, cnf);
+		return;
+	}
+	if (!cnf)
+	{
+		return;
+	}
+	ClsNode* head = cnf;
+	ClsNode* current = cnf->down;
+	while (current)
+	{
+		if (current->varnum == 1 && current->ClsHead->var == var)
+		{
+			removeCls(cnf, current);
+			cnf = head;
+			break;
+		}
+		cnf = current;
+		current = current->down;
+	}
+	// test
+	 /*
+	current = head;
+	while (current)
+	{
+		cout << current->varnum << " : ";
+		VarNode* cur = current->ClsHead;
+		while (cur)
+		{
+			cout << cur->var;
+			cout << " ";
+			cur = cur->next;
+		}
+		cout << endl;
+		current = current->down;
+	}
+	*/
+}
+
+void removeVar(ClsNode*& cnf, int var)
+{
+	if (!cnf)
+	{
+		return;
+	}
+	ClsNode* current = cnf;
+	while (current)
+	{
+		ClsNode* temp = current->down;
+		VarNode* prev, * cur;
+		prev = cur = nullptr;
+		if (current->ClsHead->var == var)
+		{
+			removeCls(cnf, current);
+			current = temp;
+			continue;
+		}
+		else if (current->ClsHead->var == -var)
+		{
+			int abs = var > 0 ? var : -var;
+			times[abs]--;
+			current->ClsHead = current->ClsHead->next;
+			current->varnum--;
+		}
+		if (current->varnum)
+		{
+			prev = current->ClsHead;
+			cur = current->ClsHead->next;
+			while (cur)
+			{
+				if (cur->var == var)
 				{
-					fp << -i << " ";
+					removeCls(cnf, current);
+					break;
+				}
+				else if (cur->var == -var)
+				{
+					int abs = var > 0 ? var : -var;
+					times[abs]--;
+					prev->next = cur->next;
+					current->varnum--;
+				}
+				prev = cur;
+				if (cur)
+				{
+					cur = prev->next;
 				}
 			}
-			fp << endl;
-			fp << "t" << " " << (end - start);
+		}
+		current = temp;
+	}	
+	// test
+	/*
+	current = cnf;
+	cout << "After remove variable " << var << " : " << endl;
+	while (current)
+	{
+		cout << current->varnum << " : ";
+		VarNode* cur = current->ClsHead;
+		while (cur)
+		{
+			cout << cur->var;
+			cout << " ";
+			cur = cur->next;
+		}
+		cout << endl;
+		current = current->down;
+	}
+	*/
+}
+
+bool hasEmpty(ClsNode* cnf)
+{
+	while (cnf)
+	{
+		if (cnf->varnum == 0 || cnf->ClsHead == nullptr)
+		{
+			return true;
+		}
+		cnf = cnf->down;
+	}
+	return false;
+}
+
+ClsNode* addVar(ClsNode* cnf, int var)
+{
+	//cout << "Add variable " << var << endl;
+	int abs = var > 0 ? var : -var;
+	times[abs]++;
+	ClsNode* newhead = new ClsNode;
+	newhead->varnum = 1;
+	newhead->ClsHead = new VarNode;
+	newhead->ClsHead->var = var;
+	newhead->ClsHead->next = NULL;
+	newhead->down = cnf;
+	cnf = newhead;
+	return cnf;
+}
+
+ClsNode* copy(ClsNode* cnf)
+{
+	ClsNode* current = cnf;
+	ClsNode* newhead, * newtail;
+	newhead = newtail = nullptr;
+	while (current)
+	{
+		VarNode* cur = current->ClsHead;
+		VarNode* head, * tail;
+		head = tail = nullptr;
+		while (cur)
+		{
+			if (!head)
+			{
+				head = new VarNode;
+				head->next = nullptr;
+				head->var = cur->var;
+				tail = head;
+			}
+			else
+			{
+				tail->next = new VarNode;
+				tail->next->next = nullptr;
+				tail->next->var = cur->var;
+				tail = tail->next;
+			}
+			cur = cur->next;
+		}
+		if (!newhead)
+		{
+			newhead = new ClsNode;
+			newhead->down = nullptr;
+			newhead->ClsHead = head;
+			newhead->varnum = current->varnum;
+			newtail = newhead;
 		}
 		else
 		{
-			string output = fn1 + suffix_output;
-			ofstream fp(output);
-			fp << "s" << " " << "-1" << endl;
-			fp << "v" << endl;
-			fp << "t" << " " << (end - start);
+			newtail->down = new ClsNode;
+			newtail->down->down = nullptr;
+			newtail->down->ClsHead = head;
+			newtail->down->varnum = current->varnum;
+			newtail = newtail->down;
 		}
-		cout << "Duration : " << (double)(end - start) / CLOCKS_PER_SEC * 1000 << "ms" << endl;
-		cout << "Please enter the filename (enter quit to quit) : ";
-		cin >> fn1;
+		current = current->down;
 	}
-	cout << "GoodBye!";
-	/**/
-	return 0;
+	return newhead;
 }
+
+int findMax(short* times)
+{
+	int max = -1;
+	int res = 0;
+	for (int i = 1; i < vn + 1; i++)
+	{
+		if (max < times[i])
+		{
+			max = times[i];
+			res = i;
+		}
+	}
+	return res;
+}
+
+bool DPLL(ClsNode* cnf, short ans[])
+{
+	int target_var = findSC(cnf); // find single clause
+	while (target_var)
+	{
+		removeSC(cnf, target_var);
+		removeVar(cnf, target_var);
+		ans[target_var > 0 ? target_var : -target_var] = target_var > 0 ? 1 : -1;
+		if (!cnf)
+		{
+			cout << "Solved!" << endl;
+			return true;
+		}
+		else if (hasEmpty(cnf))
+		{
+			return false;
+		}
+		target_var = findSC(cnf);	
+	}
+	// test
+	/**/
+	int newnode = findMax(times);
+	ClsNode* cnf_copy = copy(cnf);
+	ClsNode* cnf_true = addVar(cnf, newnode);
+	short* temp = new short[vn + 1];
+	for (int i = 1; i < vn + 1; i++)
+	{
+		temp[i] = times[i];
+	}
+	if (DPLL(cnf_true, ans))
+	{
+		return true;
+	}
+	else
+	{
+		times = temp;
+		times[newnode > 0 ? newnode : -newnode]--;
+		ClsNode* cnf_false = addVar(cnf_copy, -newnode);
+		return DPLL(cnf_false, ans);
+	}
+	/**/
+}
+
